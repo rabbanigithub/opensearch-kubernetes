@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opensearch-master
+  namespace: opensearch
+spec:
+  serviceName: opensearch
+  replicas: 3
+  selector:
+    matchLabels:
+      app: opensearch
+  template:
+    metadata:
+      labels:
+        app: opensearch
+    spec:
+      containers:
+      - name: opensearch
+        image: opensearchproject/opensearch:latest
+        resources:
+            limits:
+              cpu: 1000m
+              memory: "2Gi"
+            requests:
+              cpu: 500m
+              memory: "1Gi"
+        ports:
+        - containerPort: 9200
+          name: rest-api
+          protocol: TCP
+        - containerPort: 9600
+          name: performance-analyzer
+          protocol: TCP
+        volumeMounts:
+        - name: opensearch-data
+          mountPath: /usr/share/opensearch/data
+        env:
+          - name: cluster.name
+            value: opensearch-cluster
+          - name: node.name
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: discovery.seed_hosts
+            value: "opensearch-master-0.opensearch,opensearch-master-1.opensearch,opensearch-master-2.opensearch"
+          - name: cluster.initial_master_nodes
+            value: "opensearch-master-0,opensearch-master-1,opensearch-master-2"
+          - name: bootstrap.memory_lock
+            value: "true"
+          - name: OPENSEARCH_JAVA_OPTS
+            value: "-Xms512m -Xmx512m"
+      initContainers:
+      - name: fix-permissions
+        image: busybox
+        command: ["sh", "-c", "chown -R 1000:1000 /usr/share/opensearch/data"]
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: opensearch-data
+          mountPath: /usr/share/opensearch/data
+      - name: increase-vm-max-map
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      - name: increase-fd-ulimit
+        image: busybox
+        command: ["sh", "-c", "ulimit -n 65536"]
+        securityContext:
+          privileged: true
+  volumes:
+  - name: opensearch-data
+    emptyDir: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: opensearch
+  namespace: opensearch
+  labels:
+    app: opensearch
+spec:
+  selector:
+    app: opensearch
+  type: NodePort
+  ports:
+    - port: 9200
+      name: rest-api
+      nodePort: 30010
+    - port: 9600
+      name: performance-analyzer
