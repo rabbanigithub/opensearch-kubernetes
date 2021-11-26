@@ -35,7 +35,7 @@ spec:
           name: rest-api
           protocol: TCP
         - containerPort: 9600
-          name: performance-analyzer
+          name: performance
           protocol: TCP
         volumeMounts:
         - name: opensearch-data
@@ -94,5 +94,5 @@ spec:
       name: rest-api
       nodePort: 30010
     - port: 9600
-      name: performance-analyzer
+      name: performance
 ---
