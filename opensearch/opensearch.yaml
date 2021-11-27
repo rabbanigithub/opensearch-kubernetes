@@ -20,22 +20,38 @@ spec:
       labels:
         app: opensearch
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - opensearch
+              topologyKey: kubernetes.io/hostname
+            weight: 1
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
       - name: opensearch
         image: opensearchproject/opensearch:latest
         resources:
             limits:
-              cpu: 1000m
-              memory: "2Gi"
+              cpu: "2"
+              memory: "1000Mi"
             requests:
-              cpu: 500m
-              memory: "1Gi"
+              cpu: "1"
+              memory: "500Mi"
         ports:
         - containerPort: 9200
           name: rest-api
           protocol: TCP
-        - containerPort: 9600
-          name: performance
+        - containerPort: 9300
+          name: transport
           protocol: TCP
         volumeMounts:
         - name: opensearch-data
@@ -51,13 +67,11 @@ spec:
             value: "opensearch-master-0.opensearch,opensearch-master-1.opensearch,opensearch-master-2.opensearch"
           - name: cluster.initial_master_nodes
             value: "opensearch-master-0,opensearch-master-1,opensearch-master-2"
-          - name: bootstrap.memory_lock
-            value: "true"
           - name: OPENSEARCH_JAVA_OPTS
-            value: "-Xms512m -Xmx512m"
+            value: "-Xms512M -Xmx512M"
       initContainers:
       - name: fix-permissions
-        image: busybox
+        image: busybox:latest
         command: ["sh", "-c", "chown -R 1000:1000 /usr/share/opensearch/data"]
         securityContext:
           privileged: true
@@ -65,12 +79,12 @@ spec:
         - name: opensearch-data
           mountPath: /usr/share/opensearch/data
       - name: increase-vm-max-map
-        image: busybox
+        image: busybox:latest
         command: ["sysctl", "-w", "vm.max_map_count=262144"]
         securityContext:
           privileged: true
-      - name: increase-fd-ulimit
-        image: busybox
+      - name: set-ulimit
+        image: busybox:latest
         command: ["sh", "-c", "ulimit -n 65536"]
         securityContext:
           privileged: true
@@ -88,11 +102,10 @@ metadata:
 spec:
   selector:
     app: opensearch
-  type: NodePort
+  type: ClusterIP
   ports:
     - port: 9200
       name: rest-api
-      nodePort: 30010
-    - port: 9600
-      name: performance
+    - port: 9300
+      name: transport
 ---
