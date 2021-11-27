@@ -40,11 +40,10 @@ metadata:
   labels:
     app: opensearch-dashboards
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
   - port: 5601
     protocol: TCP
     targetPort: opensearch-ui
-    nodePort: 30010
   selector:
     app: opensearch-dashboards
