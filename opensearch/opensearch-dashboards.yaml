@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch-dashboards
+  namespace: opensearch
+  labels:
+    app: opensearch-dashboards
+spec:
+  selector:
+    matchLabels:
+      app: opensearch-dashboards
+  template:
+    metadata:
+      labels:
+        app: opensearch-dashboards
+    spec:
+      containers:
+      - name: opensearch-dashboards
+        image: opensearchproject/opensearch-dashboards:latest
+        resources:
+          requests:
+            cpu: 500m
+            memory: "500Mi"
+          limits:
+            cpu: 1000m
+            memory: "1000Mi"
+        env:
+          - name: OPENSEARCH_HOSTS
+            value: https://opensearch.opensearch:9200
+        ports:
+        - containerPort: 5601
+          name: opensearch-ui
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-dashboards
+  namespace: opensearch
+  labels:
+    app: opensearch-dashboards
+spec:
+  type: NodePort
+  ports:
+  - port: 5601
+    protocol: TCP
+    targetPort: opensearch-ui
+    nodePort: 30010
+  selector:
+    app: opensearch-dashboards
