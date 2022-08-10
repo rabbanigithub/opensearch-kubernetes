@@ -9,7 +9,8 @@ metadata:
   name: opensearch-master
   namespace: opensearch
 spec:
-  serviceName: opensearch
+  podManagementPolicy: Parallel
+  serviceName: opensearch-master-headless
   replicas: 3
   selector:
     matchLabels:
@@ -39,54 +40,69 @@ spec:
       - name: opensearch
         image: opensearchproject/opensearch:latest
         resources:
-            limits:
-              cpu: "2"
-              memory: "1000Mi"
             requests:
               cpu: "1"
-              memory: "500Mi"
+              memory: "200Mi"
         ports:
         - containerPort: 9200
-          name: rest-api
+          name: http
           protocol: TCP
         - containerPort: 9300
           name: transport
           protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 9200
+          timeoutSeconds: 3
+        startupProbe:
+          failureThreshold: 30
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          tcpSocket:
+            port: 9200
+          timeoutSeconds: 3
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
         volumeMounts:
         - name: opensearch-data
           mountPath: /usr/share/opensearch/data
         env:
-          - name: cluster.name
-            value: opensearch-cluster
           - name: node.name
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
-          - name: discovery.seed_hosts
-            value: "opensearch-master-0.opensearch,opensearch-master-1.opensearch,opensearch-master-2.opensearch"
           - name: cluster.initial_master_nodes
             value: "opensearch-master-0,opensearch-master-1,opensearch-master-2"
+          - name: discovery.seed_hosts
+            value: opensearch-master-headless
+          - name: cluster.name
+            value: opensearch-cluster
+          - name: network.host
+            value: 0.0.0.0
           - name: OPENSEARCH_JAVA_OPTS
             value: "-Xms512M -Xmx512M"
+          - name: node.roles
+            value: master,ingest,data,remote_cluster_client,            
       initContainers:
-      - name: fix-permissions
+      - name: fsgroup-volume
         image: busybox:latest
         command: ["sh", "-c", "chown -R 1000:1000 /usr/share/opensearch/data"]
         securityContext:
-          privileged: true
+          runAsUser: 0
         volumeMounts:
         - name: opensearch-data
           mountPath: /usr/share/opensearch/data
-      - name: increase-vm-max-map
-        image: busybox:latest
-        command: ["sysctl", "-w", "vm.max_map_count=262144"]
-        securityContext:
-          privileged: true
-      - name: set-ulimit
-        image: busybox:latest
-        command: ["sh", "-c", "ulimit -n 65536"]
-        securityContext:
-          privileged: true
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
       volumes:
       - name: opensearch-data
         emptyDir: {}
@@ -104,6 +120,24 @@ spec:
   type: ClusterIP
   ports:
     - port: 9200
-      name: rest-api
+      name: http
     - port: 9300
       name: transport
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: opensearch-master-headless
+  namespace: opensearch
+  labels:
+    app: opensearch
+spec:
+  selector:
+    app: opensearch
+  type: ClusterIP
+  ports:
+    - port: 9200
+      name: http
+    - port: 9300
+      name: transport
+  clusterIPs: None
